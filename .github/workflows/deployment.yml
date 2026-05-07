@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "k8s/backend.yml"
+      - "k8s/frontend.yml"
+
+env:
+  ACR_LOGIN_SERVER: m324demoacrqba.azurecr.io
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint client
+        run: npm run lint:client
+
+      - name: Run lint server
+        run: npm run lint:server
+
+  build-docker:
+    needs: lint
+    runs-on: ubuntu-latest
+    environment: ACR
+
+    steps:
+      # --------------------
+      # Récupération du code
+      # --------------------
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      # --------------------
+      # Génération du tag unique
+      # --------------------
+      - name: Compute image tag
+        id: tag
+        run: echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      # --------------------
+      # Build & Tag Backend & Frontend Docker images
+      # --------------------
+      - name: Build Backend & Frontend Docker images
+        run: |
+          # Construction des images avec le tag SHA
+          docker build -f server/Dockerfile -t ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:${{ steps.tag.outputs.TAG }} .
+          docker build -f nginx/Dockerfile -t ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:${{ steps.tag.outputs.TAG }} .
+
+          # Création des alias "latest" à partir des images SHA
+          docker tag ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:${{ steps.tag.outputs.TAG }} ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:latest
+          docker tag ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:${{ steps.tag.outputs.TAG }} ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:latest
+
+      - name: Login to ACR (Backend & Frontend)
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Push Backend/Frontend Docker image to ACR
+        run: |
+          # Push Backend (SHA + latest)
+          docker push ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:${{ steps.tag.outputs.TAG }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:latest
+
+          # Push Frontend (SHA + latest)
+          docker push ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:${{ steps.tag.outputs.TAG }}
+          docker push ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:latest
+
+      - name: Update Backend/Frontend image tag in Kubernetes manifest
+        run: |
+          # Mise à jour du backend
+          sed -i "s|image: ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:.*|image: ${{ env.ACR_LOGIN_SERVER }}/alpinepass-backend:${{ steps.tag.outputs.TAG }}|" k8s/backend.yml
+
+          # Mise à jour du frontend
+          sed -i "s|image: ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:.*|image: ${{ env.ACR_LOGIN_SERVER }}/alpinepass-frontend:${{ steps.tag.outputs.TAG }}|" k8s/frontend.yml
+
+      - name: Commit Backend/Frontend manifests
+        run: |
+          # Configuration de Git pour l'utilisateur de commit (GitHub Actions Bot)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # On ajoute les deux fichiers en même temps
+          git add k8s/backend.yml k8s/frontend.yml
+
+          git commit -m "Update Backend/Frontend Manifests: Image updated to ${{ steps.tag.outputs.TAG }}"
+
+          # Push direct vers la branche main
+          git push origin HEAD:main
