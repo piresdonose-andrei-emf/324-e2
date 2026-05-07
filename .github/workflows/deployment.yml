@@ -33,6 +33,8 @@ jobs:
   build-and-push:
     needs: lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     environment: ACR
 
     steps:
