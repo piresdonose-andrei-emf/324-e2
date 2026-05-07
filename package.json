@@ -4,7 +4,8 @@
   "description": "Application de gestion de taches avec Express et frontend statique",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "express": "^4.21.2"

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskmanager-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: taskmanager-app
+  template:
+    metadata:
+      labels:
+        app: taskmanager-app
+    spec:
+      imagePullSecrets:
+        - name: acr-pull
+      containers:
+        - name: taskmanager-app
+          image: m324demoacrqba.azurecr.io/task-manager-app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskmanager-app-service
+spec:
+  type: ClusterIP
+  selector:
+    app: taskmanager-app
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
