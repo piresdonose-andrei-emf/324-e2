@@ -8,13 +8,6 @@ spec:
     - host: taskmanager.89.145.167.242.nip.io
       http:
         paths:
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: taskmanager-app-service
-                port:
-                  number: 3000
           - path: /
             pathType: Prefix
             backend:
