@@ -16,7 +16,7 @@ spec:
         - name: acr-pull
       containers:
         - name: taskmanager-app
-          image: m324demoacrqba.azurecr.io/task-manager-app:23c16e4
+          image: m324demoacrqba.azurecr.io/task-manager-app:b0d8751
           ports:
             - containerPort: 3000
           env:
